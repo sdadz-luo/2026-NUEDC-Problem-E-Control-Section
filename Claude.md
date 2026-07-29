@@ -128,7 +128,7 @@ int  Motor_Stop(uint8_t addr);                                   // 急停（发
 | 外设 | 引脚 | 功能 | 关键参数 |
 |---|---|---|---|
 | **GPIO** | PC13 | 板载 LED（低电平点亮） | Output PP, Pull-up |
-| **TIM2 CH4** | PA3 | 无源蜂鸣器（PWM 驱动） | 1 kHz，占空比控制音量 |
+| **GPIO** | PA3 | 有源蜂鸣器（高电平响） | Output PP，初始低电平 |
 | **GPIO** | PB4 | 电磁铁控制（低电平吸合） | Output PP，初始输出高（释放） |
 | **USART1** | PA9/PA10 | 上位机通信 | 115200-8N1, 中断接收，一问一答 |
 | **USART3** | PB10/PB11 | 步进电机通信（张大头协议） | 115200-8N1, 地址 1/2/3/4 |
@@ -148,7 +148,7 @@ int  Motor_Stop(uint8_t addr);                                   // 急停（发
 - **PC13 驱动电流 ≤ 3mA**（LQFP48 封装限制），不能直接驱动大电流 LED
 - **HSE 晶振 8MHz 必需存在**，未使能 CSS（时钟安全系统），晶振失效不会自动切 HSI
 - **堆栈**：Stack 1KB / Heap 512B，printf / 大数组 / 递归可能栈溢出
-- **PA3**（无源蜂鸣器）通过 TIM2 CH4 PWM 驱动，频率 1kHz，初始占空比 0%（不响），控制音量通过调节占空比
+- **PA3**（有源蜂鸣器）高电平响、低电平停，通过 GPIO 输出控制，非 PWM
 
 ---
 
@@ -243,7 +243,7 @@ $$pulse = \text{distance}_{\text{mm}} \times \frac{6400}{4} = \text{distance}_{\
 ### 1. 完成信号实现注意事项（🟢 低）
 
 - LED（PC13, 低电平点亮）：0.5Hz 闪烁 = 亮 0.5s / 灭 0.5s，非阻塞方式
-- 蜂鸣器（PA3, TIM2 CH4）：间歇响 = 有 PWM 0.5s / 停 PWM 0.5s，可通过启停 `HAL_TIM_PWM_Start/Stop` 或设置占空比 0 实现
+- 蜂鸣器（PA3, 有源）：间歇响 = 高电平 0.5s / 低电平 0.5s，HAL_GPIO_WritePin 控制
 
 ---
 
