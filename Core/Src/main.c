@@ -92,9 +92,9 @@ int main(void)
   MX_USART3_UART_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-	
-	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);  // ∆Ù∂Ø PWM
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);  // 0% ’ºø’±»
+
+	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);  //PWM
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);  // 0% Âç†Á©∫ÊØî
 	
   /* USER CODE END 2 */
 
