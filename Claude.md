@@ -1,4 +1,4 @@
-# AGENTS.md — AI 编码助手项目指导
+# Claude.md — AI 编码助手项目指导
 
 ## 项目概览
 
@@ -17,6 +17,44 @@
 - **无 CLI 构建**：本项目没有 Makefile / CMakeLists，`run_in_terminal` 执行编译命令**无效**
 - **烧录**：编译产物 `MDK-ARM/diansai/diansai.hex`，通过 DAP-Link 工具烧录
 - **调试**：仅保留 SWD（PA13/PA14），JTAG 已在 `HAL_MspInit()` 中禁用
+
+### 新增文件到 Keil 工程
+
+在 `user/` 目录下新建的 `.c/.h` 文件必须手动添加到 Keil 工程树中：
+
+1. 在 Keil IDE 左侧 Project 窗口点击 `diansai` 分组右键 → **Add Existing Files to Group 'diansai'…**
+2. 选择 `user/motor.c`，加入工程
+3. 点击魔术棒 → **C/C++ (AC6)** → **Include Paths** → 添加 `../user/` 路径
+4. 点 OK 保存设置
+
+> 不执行第 3 步会导致头文件 `motor.h` 找不到。
+
+---
+
+## 用户模块
+
+`user/` 目录存放非 CubeMX 生成的业务代码。
+
+| 文件 | 说明 |
+|------|------|
+| `motor.h` | 步进电机驱动 — 地址宏、方向速度配置、`Motor_MoveTo` API |
+| `motor.c` | 帧组装（float 精算→int32 组帧）、阻塞等待到位、超时重试 |
+
+### 步进电机驱动 API
+
+```c
+void Motor_Init(void);                                           // 上电使能+清零四轴
+int  Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit); // 发绝对定位指令，不等待
+int  Motor_WaitMoveDone(uint8_t addr);                            // 等待指定电机到位，±20s 超时
+int  Motor_Enable(uint8_t addr);                                 // 使能（发后即回，不等应答）
+int  Motor_Zero(uint8_t addr);                                   // 清零（发后即回，不等应答）
+int  Motor_Stop(uint8_t addr);                                   // 急停（发后即回，不等应答）
+```
+
+- X/Y/Z 传 `mm`，Yaw 传 `°`，单位由 `MotorUnit` 枚举指定
+- 全程 `float` 精确计算，仅在发帧前转 `int32_t`
+- `Motor_SendMoveTo` + `Motor_WaitMoveDone` 两步分离，支持多轴同时运动
+- 到位应答 `{addr} FD 9F 6B`，超时 20s 后重发一次
 
 ---
 
@@ -194,33 +232,15 @@ $$pulse = \text{distance}_{\text{mm}} \times \frac{6400}{4} = \text{distance}_{\
 - 回应格式：`addr + func回显 + 状态码 + 6B`，`02`=成功/到位
 - **上电先发 F3 使能各轴** → 再发 0A 清零回零 → 之后才能发 FD 绝对定位
 - **无校验机制**：CS 固定值不作校验和，建议代码层加超时重发（如 500ms 无回应重发一次）
-- **到位应答**：发送 FD 后，电机到位时回发 `{addr} FD 02 6B`（如 `01 FD 02 6B`），**收到此应答后才能判定移动完成**，不可仅靠延时等待
+- **到位应答**：发送 FD 后，电机到位时回发 `{addr} FD 9F 6B`（如 `01 FD 9F 6B`），**收到此应答后才能判定移动完成**，不可仅靠延时等待
+- **使能/清零/停止**：上位机发帧即回，无需等待电机应答
 - 绝对定位到位后电机会自锁，编码器持续监测纠偏
 
 ---
 
 ## 🚨 待处理问题
 
-### 1. USART1/USART3 中断处理函数缺失（🔴 严重）
-
-`stm32f1xx_it.c` 中未实现 `USART1_IRQHandler()` 和 `USART3_IRQHandler()`，但 NVIC 中两个串口中断已使能。收到数据 → HardFault。
-
-**修复**：在 `stm32f1xx_it.c` 的 USER CODE 区域添加：
-
-```c
-void USART1_IRQHandler(void) {
-    HAL_UART_IRQHandler(&huart1);
-}
-void USART3_IRQHandler(void) {
-    HAL_UART_IRQHandler(&huart3);
-}
-```
-
-### 2. PB4 引脚配置（🟡 中等）
-
-PB4 原为 JTAG 的 NJTRST 脚，`HAL_MspInit()` 已调用 `__HAL_AFIO_REMAP_SWJ_NOJTAG()` 释放。需在 CubeMX 中将 PB4 配置为 GPIO_Output（PP，初始高电平 = 电磁铁释放）。
-
-### 3. 完成信号实现注意事项（🟢 低）
+### 1. 完成信号实现注意事项（🟢 低）
 
 - LED（PC13, 低电平点亮）：0.5Hz 闪烁 = 亮 0.5s / 灭 0.5s，非阻塞方式
 - 蜂鸣器（PA3, TIM2 CH4）：间歇响 = 有 PWM 0.5s / 停 PWM 0.5s，可通过启停 `HAL_TIM_PWM_Start/Stop` 或设置占空比 0 实现

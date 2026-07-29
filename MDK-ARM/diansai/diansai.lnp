@@ -21,6 +21,7 @@
 "diansai\stm32f1xx_hal_exti.o"
 "diansai\stm32f1xx_hal_uart.o"
 "diansai\system_stm32f1xx.o"
+"diansai\motor.o"
 --strict --scatter "diansai\diansai.sct"
 --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers

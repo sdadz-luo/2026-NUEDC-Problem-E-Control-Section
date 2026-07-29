@@ -24,7 +24,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "motor.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -92,19 +92,16 @@ int main(void)
   MX_USART3_UART_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-
 	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);  //PWM
 	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);  // 0% 占空比
-	
+
+	Motor_Init();                                // 使能+清零四轴
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-		HAL_GPIO_TogglePin(GPIOC,GPIO_PIN_13);
-		HAL_Delay(1000);
-		
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
