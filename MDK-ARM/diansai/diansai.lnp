@@ -1,0 +1,27 @@
+--cpu Cortex-M3
+"diansai\startup_stm32f103xb.o"
+"diansai\main.o"
+"diansai\gpio.o"
+"diansai\tim.o"
+"diansai\usart.o"
+"diansai\stm32f1xx_it.o"
+"diansai\stm32f1xx_hal_msp.o"
+"diansai\stm32f1xx_hal_gpio_ex.o"
+"diansai\stm32f1xx_hal_tim.o"
+"diansai\stm32f1xx_hal_tim_ex.o"
+"diansai\stm32f1xx_hal.o"
+"diansai\stm32f1xx_hal_rcc.o"
+"diansai\stm32f1xx_hal_rcc_ex.o"
+"diansai\stm32f1xx_hal_gpio.o"
+"diansai\stm32f1xx_hal_dma.o"
+"diansai\stm32f1xx_hal_cortex.o"
+"diansai\stm32f1xx_hal_pwr.o"
+"diansai\stm32f1xx_hal_flash.o"
+"diansai\stm32f1xx_hal_flash_ex.o"
+"diansai\stm32f1xx_hal_exti.o"
+"diansai\stm32f1xx_hal_uart.o"
+"diansai\system_stm32f1xx.o"
+--strict --scatter "diansai\diansai.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "diansai.map" -o diansai\diansai.axf
