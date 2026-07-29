@@ -56,6 +56,33 @@ int  Motor_Stop(uint8_t addr);                                   // 急停（发
 - `Motor_SendMoveTo` + `Motor_WaitMoveDone` 两步分离，支持多轴同时运动
 - 到位应答 `{addr} FD 9F 6B`，超时 20s 后重发一次
 
+### 坐标映射
+
+机器上电归零位（电机零点）与上位机坐标系原点存在固定偏移，Z/Yaw 无偏移。
+
+```c
+// motor.h — 待实测后填入实际值
+#define HOME_OFFSET_X_MM    0.0f
+#define HOME_OFFSET_Y_MM    0.0f
+```
+
+**映射公式**（调用 `Motor_SendMoveTo` 时）：
+
+```
+电机 X 目标 = 上位机 X + HOME_OFFSET_X_MM
+电机 Y 目标 = 上位机 Y + HOME_OFFSET_Y_MM
+电机 Z/Yaw 目标 = 上位机值（透传）
+```
+
+### Z 轴升降位置
+
+Z 轴只有抬起/放下两种状态，直接使用宏定义：
+
+```c
+#define Z_HEIGHT_RAISE_MM   0.0f   /* 抬起高度（距离零点） */
+#define Z_HEIGHT_LOWER_MM   15.0f  /* 放下高度（距离零点） */
+```
+
 ---
 
 ## 代码生成规则（必须遵守）
@@ -127,7 +154,7 @@ int  Motor_Stop(uint8_t addr);                                   // 急停（发
 
 | 外设 | 引脚 | 功能 | 关键参数 |
 |---|---|---|---|
-| **GPIO** | PC13 | 板载 LED（低电平点亮） | Output PP, Pull-up |
+| **GPIO** | PC13 | 板载 LED（高电平点亮） | Output PP, Pull-up |
 | **GPIO** | PA3 | 有源蜂鸣器（高电平响） | Output PP，初始低电平 |
 | **GPIO** | PB4 | 电磁铁控制（低电平吸合） | Output PP，初始输出高（释放） |
 | **USART1** | PA9/PA10 | 上位机通信 | 115200-8N1, 中断接收，一问一答 |
@@ -242,7 +269,7 @@ $$pulse = \text{distance}_{\text{mm}} \times \frac{6400}{4} = \text{distance}_{\
 
 ### 1. 完成信号实现注意事项（🟢 低）
 
-- LED（PC13, 低电平点亮）：0.5Hz 闪烁 = 亮 0.5s / 灭 0.5s，非阻塞方式
+- LED（PC13, 高电平点亮）：0.5Hz 闪烁 = 亮 0.5s / 灭 0.5s，非阻塞方式
 - 蜂鸣器（PA3, 有源）：间歇响 = 高电平 0.5s / 低电平 0.5s，HAL_GPIO_WritePin 控制
 
 ---

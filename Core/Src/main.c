@@ -93,6 +93,14 @@ int main(void)
 
 	Motor_Init();                                // 使能+清零四轴
 
+	/* ↓↓↓ 测试 Z 轴升降 ↓↓↓ */
+	Motor_SendMoveTo(MOTOR_ADDR_Z, Z_HEIGHT_LOWER_MM, UNIT_MM);  // 放下
+	Motor_WaitMoveDone(MOTOR_ADDR_Z);                        
+
+	Motor_SendMoveTo(MOTOR_ADDR_Z, Z_HEIGHT_RAISE_MM, UNIT_MM);  // 抬起
+	Motor_WaitMoveDone(MOTOR_ADDR_Z);
+	/* ↑↑↑ 测试结束 ↑↑↑ */
+
   /* USER CODE END 2 */
 
   /* Infinite loop */

@@ -205,27 +205,6 @@ int Motor_WaitMoveDone(uint8_t addr)
     return Motor_WaitArrived(addr, MOTOR_TIMEOUT_MS);
 }
 
-int Motor_MoveTo(uint8_t addr, float value, MotorUnit unit)
-{
-    uint8_t retry;
-
-    Motor_FlushRx();
-
-    for (retry = 0; retry <= MOTOR_RETRY_MAX; retry++) {
-        if (Motor_SendMoveTo(addr, value, unit) != 0) {
-            /* 发送失败也继续重试 */
-            HAL_Delay(MOTOR_FRAME_INTERVAL_MS);
-            continue;
-        }
-        if (Motor_WaitMoveDone(addr) == 0) {
-            return 0;
-        }
-        Motor_FlushRx();
-    }
-
-    return -1;
-}
-
 void Motor_Init(void)
 {
     uint8_t addrs[] = {MOTOR_ADDR_X, MOTOR_ADDR_Y, MOTOR_ADDR_Z, MOTOR_ADDR_YAW};
