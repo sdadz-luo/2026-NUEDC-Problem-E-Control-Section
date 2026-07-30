@@ -12,6 +12,8 @@
 
 /* ======================== 内部变量 ======================== */
 
+static float motor_current[5];  /* 各轴当前目标位置，索引 1~4，地址 0 不用 */
+
 /* ======================== 内部辅助函数 ======================== */
 
 /**
@@ -147,6 +149,9 @@ int Motor_Zero(uint8_t addr)
     frame[2] = 0x6D;
     frame[3] = 0x6B;
 
+    /* 复位当前位置追踪 */
+    motor_current[addr] = 0.0f;
+
     /* 只管发送，无需等待回发 */
     return Motor_SendFrame(frame, sizeof(frame));
 }
@@ -170,6 +175,11 @@ int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit)
     uint8_t dir;
     uint16_t rpm;
 
+    /* 已在目标位置 → 跳过，无需发送 */
+    if (fabsf(value - motor_current[addr]) < 0.01f) {
+        return 1;
+    }
+
     /* ---- 计算脉冲值和方向 ---- */
     if (unit == UNIT_MM) {
         pulse_f = value * 1600.0f;
@@ -178,7 +188,7 @@ int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit)
     }
 
     dir = (value >= 0.0f) ? Motor_GetForwardDir(addr) : Motor_ReverseDir(Motor_GetForwardDir(addr));
-    pulse_abs = (pulse_f < 0.0f) ? 0UL : (uint32_t)pulse_f;
+    pulse_abs = (uint32_t)fabsf(pulse_f);
     rpm = Motor_GetRPM(addr);
 
     /* ---- 组帧 ---- */
@@ -197,7 +207,11 @@ int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit)
     frame[12] = 0x6B;
 
     /* ---- 发送（不等待应答） ---- */
-    return Motor_SendFrame(frame, sizeof(frame));
+    if (Motor_SendFrame(frame, sizeof(frame)) == 0) {
+        motor_current[addr] = value;  /* 发送成功，更新追踪 */
+        return 0;
+    }
+    return -1;
 }
 
 int Motor_WaitMoveDone(uint8_t addr)
@@ -211,6 +225,11 @@ void Motor_Init(void)
     uint8_t i;
 
     HAL_Delay(1000);
+
+    /* 初始化位置追踪 */
+    for (i = 1; i <= 4; i++) {
+        motor_current[i] = 0.0f;
+    }
 
     /* 先逐个使能（无回发等待，仅 10ms 帧间隔） */
     for (i = 0; i < sizeof(addrs) / sizeof(addrs[0]); i++) {

@@ -40,8 +40,8 @@ extern "C" {
 #define MOTOR_YAW_RPM   300U
 
 /* =========== 上位机原点 → 电机零点 偏移量（待实测） =========== */
-#define HOME_OFFSET_X_MM    0.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
-#define HOME_OFFSET_Y_MM    0.0f   /* 上位机原点在电机坐标系下的 Y 坐标 */
+#define HOME_OFFSET_X_MM    -140.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
+#define HOME_OFFSET_Y_MM    -299.0f   /* 上位机原点在电机坐标系下的 Y 坐标 */
 
 /* =========== Z 轴升降位置 =========== */
 #define Z_HEIGHT_RAISE_MM   0.0f  /* 抬起高度（距离零点） */
@@ -86,9 +86,10 @@ int Motor_Zero(uint8_t addr);
   * @param  addr  电机地址
   * @param  value 目标值：X/Y/Z 传 mm，Yaw 传 °
   * @param  unit  单位（UNIT_MM / UNIT_DEG）
-  * @retval 0=发送成功, -1=发送失败
+  * @retval 0=发送成功（需调用 Motor_WaitMoveDone）, 1=已在目标位无需移动, -1=发送失败
   * @note   只发送不等待，适合多轴同时启动
   *         内部已包含 ≥10ms 帧间间隔，连续调用时无需额外延时
+  *         返回 1 时表示该轴已在目标位置，上层应跳过 Motor_WaitMoveDone
   */
 int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit);
 
