@@ -88,7 +88,7 @@ static void pick_and_place(MoveCommand *cmd)
         Motor_WaitMoveDone(MOTOR_ADDR_Z);
 
     /* 3. 电磁铁吸合 */
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
     HAL_Delay(500);
 
     /* 4. Z 轴抬起 */
@@ -110,7 +110,7 @@ static void pick_and_place(MoveCommand *cmd)
         Motor_WaitMoveDone(MOTOR_ADDR_Z);
 
     /* 7. 电磁铁释放 */
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
 
     /* 8. Z 轴抬起 */
     if (Motor_SendMoveTo(MOTOR_ADDR_Z, Z_HEIGHT_RAISE_MM, UNIT_MM) == 0)
