@@ -219,6 +219,43 @@ int Motor_WaitMoveDone(uint8_t addr)
     return Motor_WaitArrived(addr, MOTOR_TIMEOUT_MS);
 }
 
+int Motor_WaitAllDone(const uint8_t *addrs, uint8_t count, uint32_t timeout_ms)
+{
+    uint32_t start = HAL_GetTick();
+    uint8_t pending = 0;
+    uint8_t i;
+
+    /* 初始化：全部标记为待处理 */
+    for (i = 0; i < count; i++) {
+        pending |= (1 << i);
+    }
+
+    while (pending) {
+        uint8_t resp[4];
+
+        /* 短超时读取，收满 4 字节即返回 */
+        if (HAL_UART_Receive(&huart3, resp, 4, 100) == HAL_OK) {
+            /* 检查应答是否属于某个待处理的轴 */
+            for (i = 0; i < count; i++) {
+                if ((pending & (1 << i))
+                    && resp[0] == addrs[i]
+                    && resp[1] == 0xFD
+                    && resp[2] == 0x9F
+                    && resp[3] == 0x6B) {
+                    pending &= ~(1 << i);   /* 标记该轴到位 */
+                    break;
+                }
+            }
+        }
+
+        /* 总超时检查 */
+        if (HAL_GetTick() - start > timeout_ms) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 void Motor_Init(void)
 {
     uint8_t addrs[] = {MOTOR_ADDR_X, MOTOR_ADDR_Y, MOTOR_ADDR_Z, MOTOR_ADDR_YAW};

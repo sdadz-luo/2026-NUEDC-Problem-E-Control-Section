@@ -31,13 +31,13 @@ extern "C" {
 #define MOTOR_X_DIR_FORWARD     MOTOR_DIR_CCW
 #define MOTOR_Y_DIR_FORWARD     MOTOR_DIR_CW
 #define MOTOR_Z_DIR_FORWARD     MOTOR_DIR_CCW
-#define MOTOR_YAW_DIR_FORWARD   MOTOR_DIR_CW
+#define MOTOR_YAW_DIR_FORWARD   MOTOR_DIR_CCW
 
 /* =========== 各轴转速 RPM（可独立调节） =========== */
 #define MOTOR_X_RPM     1500U
 #define MOTOR_Y_RPM     1500U
 #define MOTOR_Z_RPM     1500U
-#define MOTOR_YAW_RPM   300U
+#define MOTOR_YAW_RPM   200U
 
 /* =========== 上位机原点 → 电机零点 偏移量（待实测） =========== */
 #define HOME_OFFSET_X_MM    -140.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
@@ -45,10 +45,10 @@ extern "C" {
 
 /* =========== Z 轴升降位置 =========== */
 #define Z_HEIGHT_RAISE_MM   0.0f  /* 抬起高度（距离零点） */
-#define Z_HEIGHT_LOWER_MM   15.0f   /* 放下高度（距离零点） */
+#define Z_HEIGHT_LOWER_MM   13.0f   /* 放下高度（距离零点） */
 
 /* ================== 运动参数 ================== */
-#define MOTOR_ACCEL         0x96U       /* 加速度系数（默认 100） */
+#define MOTOR_ACCEL         0x96U       /* 加速度系数（默认 150） */
 #define MOTOR_FRAME_INTERVAL_MS  10U    /* 帧间间隔 ≥10ms */
 #define MOTOR_TIMEOUT_MS    20000U      /* 单次等待超时 20s */
 #define MOTOR_RETRY_MAX     1U          /* 超时后重发次数 */
@@ -100,6 +100,17 @@ int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit);
   * @note   等待电机回传 {addr} FD 9F 6B，超时 20s
   */
 int Motor_WaitMoveDone(uint8_t addr);
+
+/**
+  * @brief  并行等待多个电机到位（阻塞）
+  * @param  addrs      电机地址数组
+  * @param  count      电机数量
+  * @param  timeout_ms 总超时（从调用开始计时）
+  * @retval 0=全部到位, -1=超时
+  * @note   应答可乱序到达，按地址匹配
+  *         适合共享总线场景下多轴并行运动后的等待
+  */
+int Motor_WaitAllDone(const uint8_t *addrs, uint8_t count, uint32_t timeout_ms);
 
 /**
   * @brief  急停指定电机

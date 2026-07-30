@@ -48,6 +48,7 @@
 void Motor_Init(void);                                           // 上电使能+清零四轴
 int  Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit); // 发绝对定位指令，不等待
 int  Motor_WaitMoveDone(uint8_t addr);                            // 等待指定电机到位，±20s 超时
+int  Motor_WaitAllDone(const uint8_t *addrs, uint8_t count, uint32_t timeout_ms); // 并行等待多轴到位
 int  Motor_Enable(uint8_t addr);                                 // 使能（发后即回，不等应答）
 int  Motor_Zero(uint8_t addr);                                   // 清零（发后即回，不等应答）
 int  Motor_Stop(uint8_t addr);                                   // 急停（发后即回，不等应答）
@@ -59,6 +60,8 @@ int  Motor_Stop(uint8_t addr);                                   // 急停（发
 - `Motor_SendMoveTo` + `Motor_WaitMoveDone` 两步分离，支持多轴同时运动
 - `Motor_SendMoveTo` 返回值：`0`=已发送(需等待), `1`=已在目标位(跳过等待), `-1`=失败
 - 内部维护各轴当前位置追踪，已在目标位的轴自动跳过通信
+- 多轴等待使用 `Motor_WaitAllDone`，应答可乱序到达
+- `Motor_Enable/Zero/Stop`：发送即返回，不等待应答
 - 到位应答 `{addr} FD 9F 6B`，超时 20s 后重发一次
 
 ### 坐标映射
@@ -141,10 +144,10 @@ Z 轴只有抬起/放下两种状态，直接使用宏定义：
 ### 典型 pick-and-place 动作序列
 
 1. X/Y 轴同时移动到抓取点（+HOME_OFFSET 映射）
-2. Z 轴下降 → 电磁铁吸合（PB1 = 低电平）→ 等待 500ms
+2. Z 轴下降 → 电磁铁吸合（PB1 = 高电平）→ 等待 500ms
 3. Z 轴抬起
 4. X/Y/Yaw 轴同时移动到放置点（+HOME_OFFSET 映射）
-5. Z 轴下降 → 电磁铁释放（PB1 = 高电平）
+5. Z 轴下降 → 电磁铁释放（PB1 = 低电平）
 6. Z 轴抬起回到安全高度
 7. Yaw 轴归零
 
@@ -167,7 +170,8 @@ Z 轴只有抬起/放下两种状态，直接使用宏定义：
 |---|---|---|---|
 | **GPIO** | PC13 | 板载 LED（高电平点亮） | Output PP, Pull-up |
 | **GPIO** | PA3 | 有源蜂鸣器（高电平响） | Output PP，初始低电平 |
-| **GPIO** | PB1 | 电磁铁控制（低电平吸合） | Output PP，初始输出高（释放） |
+| **GPIO** | PB1 | 电磁铁控制（高电平吸合） | Output PP，初始输出低（释放） |
+| **GPIO** | PB4 | 触发信号（输入，下拉） | 上电后高电平触发 READY 发送 |
 | **GPIO** | PB5 | 模式选择（输入，上拉） | 高电平=模式1, 低电平=模式2, 仅上电检测一次 |
 | **USART1** | PA9/PA10 | 上位机通信 | 115200-8N1, 中断接收，一问一答 |
 | **USART3** | PB10/PB11 | 步进电机通信（张大头协议） | 115200-8N1, 地址 1/2/3/4 |
@@ -185,7 +189,7 @@ PB5 上电时检测一次：
 | 高 | 1 | 模式1（发送 0x01） |
 | 低 | 2 | 模式2（发送 0x02） |
 
-- 检测时机：`MX_GPIO_Init()` 之后、`Motor_Init()` 之前
+- 检测时机：`MX_GPIO_Init()` 之后、`Motor_Init()` 之前，以及 PB4 触发时再次检测
 - 运行期间不再读取，后续逻辑通过 `g_mode` 分支
 
 ---
@@ -242,7 +246,9 @@ PB5 上电时检测一次：
 #### 通信流程
 
 ```
-MCU 上电 → 发 AA 00 mode BB（READY）
+MCU 上电 → 初始化外设+电机 → 等待 PB4 高电平
+              ↓
+PB4 高电平 → 读 PB5 模式 → 发 AA 00 mode BB（READY）
               ↓
 上位机     → 发 AA 01 ... BB（坐标指令）
               ↓
@@ -297,7 +303,7 @@ addr FD dir speed_H speed_L accel pulse[4B BE] mode sync CS
 |------|:---:|------|
 | dir | 3 | `00`=顺时针, `01`=逆时针 |
 | speed | 4-5 | 匀速转速 RPM，大端无符号 |
-| accel | 6 | 加速度系数，默认 `64H`(100) |
+| accel | 6 | 加速度系数，默认 `96H`(150) |
 | pulse | 7-10 | 目标脉冲数，**大端无符号 int32** |
 | mode | 11 | `01`=绝对定位 |
 | sync | 12 | `00`=立即执行 |

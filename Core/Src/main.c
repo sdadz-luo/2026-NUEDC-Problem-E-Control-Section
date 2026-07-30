@@ -50,9 +50,10 @@ uint8_t g_mode;          /* 工作模式：1=模式1, 2=模式2 */
 uint8_t uart1_rx_byte;   /* UART1 单字节中断接收缓冲 */
 
 typedef enum {
-    SYS_IDLE,       /* 等待第一个坐标帧 */
-    SYS_WAIT_NEXT,  /* 已发 DONE，等待下一条指令或超时 */
-    SYS_COMPLETE    /* 游戏完成，闪烁 5s */
+    SYS_WAIT_TRIGGER, /* 等待 PB4 高电平触发 */
+    SYS_IDLE,         /* 等待第一个坐标帧 */
+    SYS_WAIT_NEXT,    /* 已发 DONE，等待下一条指令或超时 */
+    SYS_COMPLETE      /* 游戏完成，闪烁 5s */
 } SysState;
 SysState sys_state;
 uint32_t tick_done;      /* DONE 帧发送时刻 */
@@ -75,12 +76,18 @@ static void pick_and_place(MoveCommand *cmd);
   */
 static void pick_and_place(MoveCommand *cmd)
 {
-    /* 1. 移动到抓取点（先发后等，确保双轴同时运动） */
+    /* 1. 移动到抓取点（先发后等，并行等待应答） */
     {
-        int x_ret = Motor_SendMoveTo(MOTOR_ADDR_X, cmd->x_grab + HOME_OFFSET_X_MM, UNIT_MM);
-        int y_ret = Motor_SendMoveTo(MOTOR_ADDR_Y, cmd->y_grab + HOME_OFFSET_Y_MM, UNIT_MM);
-        if (x_ret == 0) Motor_WaitMoveDone(MOTOR_ADDR_X);
-        if (y_ret == 0) Motor_WaitMoveDone(MOTOR_ADDR_Y);
+        uint8_t grab_addrs[] = {MOTOR_ADDR_X, MOTOR_ADDR_Y};
+        uint8_t grab_cnt = 0;
+        uint8_t grab_list[2];
+
+        if (Motor_SendMoveTo(MOTOR_ADDR_X, cmd->x_grab + HOME_OFFSET_X_MM, UNIT_MM) == 0)
+            grab_list[grab_cnt++] = MOTOR_ADDR_X;
+        if (Motor_SendMoveTo(MOTOR_ADDR_Y, cmd->y_grab + HOME_OFFSET_Y_MM, UNIT_MM) == 0)
+            grab_list[grab_cnt++] = MOTOR_ADDR_Y;
+        if (grab_cnt > 0)
+            Motor_WaitAllDone(grab_list, grab_cnt, MOTOR_TIMEOUT_MS);
     }
 
     /* 2. Z 轴落下 */
@@ -88,21 +95,26 @@ static void pick_and_place(MoveCommand *cmd)
         Motor_WaitMoveDone(MOTOR_ADDR_Z);
 
     /* 3. 电磁铁吸合 */
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
     HAL_Delay(500);
 
     /* 4. Z 轴抬起 */
     if (Motor_SendMoveTo(MOTOR_ADDR_Z, Z_HEIGHT_RAISE_MM, UNIT_MM) == 0)
         Motor_WaitMoveDone(MOTOR_ADDR_Z);
 
-    /* 5. 移动到放置点 */
+    /* 5. 移动到放置点（先发后等，并行等待应答） */
     {
-        int x_ret  = Motor_SendMoveTo(MOTOR_ADDR_X,   cmd->x_place + HOME_OFFSET_X_MM, UNIT_MM);
-        int y_ret  = Motor_SendMoveTo(MOTOR_ADDR_Y,   cmd->y_place + HOME_OFFSET_Y_MM, UNIT_MM);
-        int yaw_ret = Motor_SendMoveTo(MOTOR_ADDR_YAW, cmd->yaw,                      UNIT_DEG);
-        if (x_ret  == 0) Motor_WaitMoveDone(MOTOR_ADDR_X);
-        if (y_ret  == 0) Motor_WaitMoveDone(MOTOR_ADDR_Y);
-        if (yaw_ret == 0) Motor_WaitMoveDone(MOTOR_ADDR_YAW);
+        uint8_t place_list[3];
+        uint8_t place_cnt = 0;
+
+        if (Motor_SendMoveTo(MOTOR_ADDR_X,   cmd->x_place + HOME_OFFSET_X_MM, UNIT_MM) == 0)
+            place_list[place_cnt++] = MOTOR_ADDR_X;
+        if (Motor_SendMoveTo(MOTOR_ADDR_Y,   cmd->y_place + HOME_OFFSET_Y_MM, UNIT_MM) == 0)
+            place_list[place_cnt++] = MOTOR_ADDR_Y;
+        if (Motor_SendMoveTo(MOTOR_ADDR_YAW, cmd->yaw,                      UNIT_DEG) == 0)
+            place_list[place_cnt++] = MOTOR_ADDR_YAW;
+        if (place_cnt > 0)
+            Motor_WaitAllDone(place_list, place_cnt, MOTOR_TIMEOUT_MS);
     }
 
     /* 6. Z 轴落下 */
@@ -110,7 +122,8 @@ static void pick_and_place(MoveCommand *cmd)
         Motor_WaitMoveDone(MOTOR_ADDR_Z);
 
     /* 7. 电磁铁释放 */
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+    HAL_Delay(200);
 
     /* 8. Z 轴抬起 */
     if (Motor_SendMoveTo(MOTOR_ADDR_Z, Z_HEIGHT_RAISE_MM, UNIT_MM) == 0)
@@ -161,10 +174,9 @@ int main(void)
 
 	Motor_Init();                                // 使能+清零四轴
 
-	Protocol_Init(g_mode);                       // 发送 READY 帧
 	HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);  // 启动单字节接收
 
-	sys_state = SYS_IDLE;                        // 初始状态
+	sys_state = SYS_WAIT_TRIGGER;                // 等待 PB4 触发
 
   /* USER CODE END 2 */
 
@@ -174,6 +186,20 @@ int main(void)
   {
     switch (sys_state)
     {
+    case SYS_WAIT_TRIGGER:
+        /* 等待 PB4 高电平 → 消抖 → 检测模式并发送 READY */
+        if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_SET)
+        {
+            HAL_Delay(20);  /* 消抖 */
+            if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_SET)
+            {
+                g_mode = (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5) == GPIO_PIN_SET) ? 1 : 2;
+                Protocol_Init(g_mode);
+                sys_state = SYS_IDLE;
+            }
+        }
+        break;
+
     case SYS_IDLE:
     case SYS_WAIT_NEXT:
         /* 收到坐标帧 → 执行动作 → 发 DONE → 看门狗计时 */
