@@ -46,7 +46,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint8_t g_mode;          /* 工作模式：1=模式1, 2=模式2 */
+uint8_t g_mode;          /* 工作模式：1/2/3，由 PB6+PB7 组合决定 */
 uint8_t uart1_rx_byte;   /* UART1 单字节中断接收缓冲 */
 
 typedef enum {
@@ -169,9 +169,6 @@ int main(void)
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
 
-	/* 上电检测 PB5 电平决定工作模式 */
-	g_mode = (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5) == GPIO_PIN_SET) ? 1 : 2;
-
 	Motor_Init();                                // 使能+清零四轴
 
 	HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);  // 启动单字节接收
@@ -193,7 +190,16 @@ int main(void)
             HAL_Delay(20);  /* 消抖 */
             if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_SET)
             {
-                g_mode = (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5) == GPIO_PIN_SET) ? 1 : 2;
+                {
+                    uint8_t pb6 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6);
+                    uint8_t pb7 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_7);
+                    if (pb6 == GPIO_PIN_SET && pb7 == GPIO_PIN_SET)
+                        g_mode = 1;
+                    else if (pb6 == GPIO_PIN_RESET && pb7 == GPIO_PIN_SET)
+                        g_mode = 2;
+                    else
+                        g_mode = 3;
+                }
                 Protocol_Init(g_mode);
                 sys_state = SYS_IDLE;
             }
