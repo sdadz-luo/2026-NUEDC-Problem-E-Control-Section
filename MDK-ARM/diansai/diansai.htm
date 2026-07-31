@@ -3,7 +3,7 @@
 <title>Static Call Graph - [diansai\diansai.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image diansai\diansai.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 6240002: Last Updated: Fri Jul 31 09:07:01 2026
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 6240002: Last Updated: Fri Jul 31 14:38:28 2026
 <BR><P>
 <H3>Maximum Stack Usage =        296 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
@@ -867,7 +867,7 @@ Global Symbols
 <P><STRONG><a name="[5]"></a>UsageFault_Handler</STRONG> (Thumb, 4 bytes, Stack size 0 bytes, stm32f1xx_it.o(.text.UsageFault_Handler))
 <BR>[Address Reference Count : 1]<UL><LI> startup_stm32f103xb.o(RESET)
 </UL>
-<P><STRONG><a name="[41]"></a>main</STRONG> (Thumb, 650 bytes, Stack size 80 bytes, main.o(.text.main))
+<P><STRONG><a name="[41]"></a>main</STRONG> (Thumb, 700 bytes, Stack size 80 bytes, main.o(.text.main))
 <BR><BR>[Stack]<UL><LI>Max Depth = 296 + Unknown Stack Size
 <LI>Call Chain = main &rArr; pick_and_place &rArr; Motor_SendMoveTo &rArr; Motor_SendFrame &rArr; HAL_UART_Transmit &rArr; UART_WaitOnFlagUntilTimeout &rArr; UART_EndRxTransfer
 </UL>
@@ -1052,7 +1052,7 @@ Global Symbols
 <H3>
 Local Symbols
 </H3>
-<P><STRONG><a name="[95]"></a>pick_and_place</STRONG> (Thumb, 480 bytes, Stack size 40 bytes, main.o(.text.pick_and_place))
+<P><STRONG><a name="[95]"></a>pick_and_place</STRONG> (Thumb, 456 bytes, Stack size 40 bytes, main.o(.text.pick_and_place))
 <BR><BR>[Stack]<UL><LI>Max Depth = 216<LI>Call Chain = pick_and_place &rArr; Motor_SendMoveTo &rArr; Motor_SendFrame &rArr; HAL_UART_Transmit &rArr; UART_WaitOnFlagUntilTimeout &rArr; UART_EndRxTransfer
 </UL>
 <BR>[Calls]<UL><LI><a href="#[96]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_fadd
@@ -1187,7 +1187,7 @@ Local Symbols
 <BR>[Called By]<UL><LI><a href="#[7d]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Motor_SendMoveTo
 </UL>
 
-<P><STRONG><a name="[86]"></a>Motor_GetRPM</STRONG> (Thumb, 86 bytes, Stack size 8 bytes, motor.o(.text.Motor_GetRPM))
+<P><STRONG><a name="[86]"></a>Motor_GetRPM</STRONG> (Thumb, 88 bytes, Stack size 8 bytes, motor.o(.text.Motor_GetRPM))
 <BR><BR>[Stack]<UL><LI>Max Depth = 8<LI>Call Chain = Motor_GetRPM
 </UL>
 <BR>[Called By]<UL><LI><a href="#[7d]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Motor_SendMoveTo

@@ -47,7 +47,7 @@
 ```c
 void Motor_Init(void);                                           // 上电使能+清零四轴
 int  Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit); // 发绝对定位指令，不等待
-int  Motor_WaitMoveDone(uint8_t addr);                            // 等待指定电机到位，±20s 超时
+int  Motor_WaitMoveDone(uint8_t addr);                            // 等待指定电机到位，±10s 超时
 int  Motor_WaitAllDone(const uint8_t *addrs, uint8_t count, uint32_t timeout_ms); // 并行等待多轴到位
 int  Motor_Enable(uint8_t addr);                                 // 使能（发后即回，不等应答）
 int  Motor_Zero(uint8_t addr);                                   // 清零（发后即回，不等应答）
@@ -62,14 +62,14 @@ int  Motor_Stop(uint8_t addr);                                   // 急停（发
 - 内部维护各轴当前位置追踪，已在目标位的轴自动跳过通信
 - 多轴等待使用 `Motor_WaitAllDone`，应答可乱序到达
 - `Motor_Enable/Zero/Stop`：发送即返回，不等待应答
-- 到位应答 `{addr} FD 9F 6B`，超时 20s 后重发一次
+- 到位应答 `{addr} FD 9F 6B`，超时 10s 后重发一次
 
 ### 坐标映射
 
 机器上电归零位（电机零点）与上位机坐标系原点存在固定偏移，Z/Yaw 无偏移。
 
 ```c
-#define HOME_OFFSET_X_MM    -140.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
+#define HOME_OFFSET_X_MM    -145.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
 #define HOME_OFFSET_Y_MM    -299.0f   /* 上位机原点在电机坐标系下的 Y 坐标 */
 ```
 
@@ -87,7 +87,7 @@ Z 轴只有抬起/放下两种状态，直接使用宏定义：
 
 ```c
 #define Z_HEIGHT_RAISE_MM   0.0f   /* 抬起高度（距离零点） */
-#define Z_HEIGHT_LOWER_MM   15.0f  /* 放下高度（距离零点） */
+#define Z_HEIGHT_LOWER_MM   17.0f  /* 放下高度（距离零点） */
 ```
 
 ---
@@ -144,18 +144,17 @@ Z 轴只有抬起/放下两种状态，直接使用宏定义：
 ### 典型 pick-and-place 动作序列
 
 1. X/Y 轴同时移动到抓取点（+HOME_OFFSET 映射）
-2. Z 轴下降 → 电磁铁吸合（PB1 = 高电平）→ 等待 500ms
+2. Z 轴下降 → 电磁铁吸合（PB1 = 高电平）→ 等待 200ms
 3. Z 轴抬起
 4. X/Y/Yaw 轴同时移动到放置点（+HOME_OFFSET 映射）
-5. Z 轴下降 → 电磁铁释放（PB1 = 低电平）
+5. Z 轴下降 → 电磁铁释放（PB1 = 低电平）→ 等待 200ms
 6. Z 轴抬起回到安全高度
-7. Yaw 轴归零
 
 ### 游戏完成模式
 
 - 触发：发送 DONE 后 5s 内未收到下一条指令（`GAME_TIMEOUT_MS = 5000U`）
 - 动作：四轴发送归零指令（不阻塞等待），LED + 蜂鸣器 0.5Hz 闪烁
-- 持续时间：5s（`COMPLETE_DURATION_MS = 5000U`），之后停止
+- 持续时间：5s（`COMPLETE_DURATION_MS = 5000U`），之后回到 `SYS_WAIT_TRIGGER` 等待下次触发
 
 ### 安全机制
 
@@ -171,9 +170,9 @@ Z 轴只有抬起/放下两种状态，直接使用宏定义：
 | **GPIO** | PC13 | 板载 LED（高电平点亮） | Output PP, Pull-up |
 | **GPIO** | PA3 | 有源蜂鸣器（高电平响） | Output PP，初始低电平 |
 | **GPIO** | PB1 | 电磁铁控制（高电平吸合） | Output PP，初始输出低（释放） |
-| **GPIO** | PB4 | 触发信号（输入，下拉） | 上电后高电平触发 READY 发送 |
-| **GPIO** | PB6 | 模式选择 bit0（输入，上拉） | 与 PB7 组合决定模式 |
-| **GPIO** | PB7 | 模式选择 bit1（输入，上拉） | 与 PB6 组合决定模式 |
+| **GPIO** | PB4 | 模式按键1（输入，下拉） | 上拉高电平=模式1 |
+| **GPIO** | PB5 | 模式按键2（输入，上拉） | 按下=低电平, 模式2 |
+| **GPIO** | PB6 | 模式按键3（输入，上拉） | 按下=低电平, 模式3 |
 | **USART1** | PA9/PA10 | 上位机通信 | 115200-8N1, 中断接收，一问一答 |
 | **USART3** | PB10/PB11 | 步进电机通信（张大头协议） | 115200-8N1, 地址 1/2/3/4 |
 | **SWD** | PA13/PA14 | 调试接口 | JTAG 已禁用 |
@@ -183,16 +182,15 @@ Z 轴只有抬起/放下两种状态，直接使用宏定义：
 
 ## 工作模式
 
-PB6/PB7 组合检测：
+模式按键（互斥）：
 
-| PB6 | PB7 | `g_mode` | 模式 |
-|:---:|:---:|:---:|---|
-| 高 | 高 | 1 | 模式1（发送 0x01） |
-| 低 | 高 | 2 | 模式2（发送 0x02） |
-| 低 | 低 | 3 | 模式3（发送 0x03） |
-| 高 | 低 | 3 | 模式3（同 LL，归并处理） |
+| 按键 | `g_mode` | 检测方式 |
+|:---:|:---:|---|
+| PB4 上拉高 | 1 | 高电平时触发 |
+| PB5 按下 | 2 | 低电平时触发 |
+| PB6 按下 | 3 | 低电平时触发 |
 
-- 检测时机：PB4 触发时检测
+- 检测时机：`SYS_WAIT_TRIGGER` 状态轮询，20ms 消抖
 - 运行期间不再读取，后续逻辑通过 `g_mode` 分支
 
 ---
@@ -249,9 +247,9 @@ PB6/PB7 组合检测：
 #### 通信流程
 
 ```
-MCU 上电 → 初始化外设+电机 → 等待 PB4 高电平
+MCU 上电 → 初始化外设+电机 → 等待按键
               ↓
-PB4 高电平 → 读 PB6/PB7 模式 → 发 AA 00 mode BB（READY）
+按键按下 → 判断模式 → 发 AA 00 mode BB（READY）
               ↓
 上位机     → 发 AA 01 ... BB（坐标指令）
               ↓
@@ -306,7 +304,7 @@ addr FD dir speed_H speed_L accel pulse[4B BE] mode sync CS
 |------|:---:|------|
 | dir | 3 | `00`=顺时针, `01`=逆时针 |
 | speed | 4-5 | 匀速转速 RPM，大端无符号 |
-| accel | 6 | 加速度系数，默认 `96H`(150) |
+| accel | 6 | 加速度系数，默认 `C8H`(200) |
 | pulse | 7-10 | 目标脉冲数，**大端无符号 int32** |
 | mode | 11 | `01`=绝对定位 |
 | sync | 12 | `00`=立即执行 |

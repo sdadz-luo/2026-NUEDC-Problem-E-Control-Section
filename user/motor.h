@@ -34,23 +34,23 @@ extern "C" {
 #define MOTOR_YAW_DIR_FORWARD   MOTOR_DIR_CCW
 
 /* =========== 各轴转速 RPM（可独立调节） =========== */
-#define MOTOR_X_RPM     1500U
-#define MOTOR_Y_RPM     1500U
-#define MOTOR_Z_RPM     1500U
-#define MOTOR_YAW_RPM   200U
+#define MOTOR_X_RPM     2000U
+#define MOTOR_Y_RPM     2000U
+#define MOTOR_Z_RPM     2000U
+#define MOTOR_YAW_RPM   500U
 
 /* =========== 上位机原点 → 电机零点 偏移量（待实测） =========== */
-#define HOME_OFFSET_X_MM    -140.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
+#define HOME_OFFSET_X_MM    -145.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
 #define HOME_OFFSET_Y_MM    -299.0f   /* 上位机原点在电机坐标系下的 Y 坐标 */
 
 /* =========== Z 轴升降位置 =========== */
 #define Z_HEIGHT_RAISE_MM   0.0f  /* 抬起高度（距离零点） */
-#define Z_HEIGHT_LOWER_MM   13.0f   /* 放下高度（距离零点） */
+#define Z_HEIGHT_LOWER_MM   17.0f   /* 放下高度（距离零点） */
 
 /* ================== 运动参数 ================== */
-#define MOTOR_ACCEL         0x96U       /* 加速度系数（默认 150） */
+#define MOTOR_ACCEL         0xC8U       /* 加速度系数（默认 200） */
 #define MOTOR_FRAME_INTERVAL_MS  10U    /* 帧间间隔 ≥10ms */
-#define MOTOR_TIMEOUT_MS    20000U      /* 单次等待超时 20s */
+#define MOTOR_TIMEOUT_MS    10000U      /* 单次等待超时 10s */
 #define MOTOR_RETRY_MAX     1U          /* 超时后重发次数 */
 
 /* ================== 单位枚举 ================== */

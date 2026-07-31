@@ -46,7 +46,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint8_t g_mode;          /* 工作模式：1/2/3，由 PB6+PB7 组合决定 */
+uint8_t g_mode;          /* 工作模式：1/2/3，由按键 PB4/PB5/PB6 决定 */
 uint8_t uart1_rx_byte;   /* UART1 单字节中断接收缓冲 */
 
 typedef enum {
@@ -96,7 +96,7 @@ static void pick_and_place(MoveCommand *cmd)
 
     /* 3. 电磁铁吸合 */
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
-    HAL_Delay(500);
+    HAL_Delay(200);
 
     /* 4. Z 轴抬起 */
     if (Motor_SendMoveTo(MOTOR_ADDR_Z, Z_HEIGHT_RAISE_MM, UNIT_MM) == 0)
@@ -128,10 +128,6 @@ static void pick_and_place(MoveCommand *cmd)
     /* 8. Z 轴抬起 */
     if (Motor_SendMoveTo(MOTOR_ADDR_Z, Z_HEIGHT_RAISE_MM, UNIT_MM) == 0)
         Motor_WaitMoveDone(MOTOR_ADDR_Z);
-
-    /* 9. Yaw 归零 */
-    if (Motor_SendMoveTo(MOTOR_ADDR_YAW, 0.0f, UNIT_DEG) == 0)
-        Motor_WaitMoveDone(MOTOR_ADDR_YAW);
 }
 
 /* USER CODE END 0 */
@@ -184,22 +180,26 @@ int main(void)
     switch (sys_state)
     {
     case SYS_WAIT_TRIGGER:
-        /* 等待 PB4 高电平 → 消抖 → 检测模式并发送 READY */
-        if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_SET)
+        /* 检测模式按键（低电平有效），互斥 */
         {
-            HAL_Delay(20);  /* 消抖 */
-            if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_SET)
+            uint8_t pb4 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
+            uint8_t pb5 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5);
+            uint8_t pb6 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6);
+
+            if (pb4 == GPIO_PIN_SET || pb5 == GPIO_PIN_RESET || pb6 == GPIO_PIN_RESET)
             {
-                {
-                    uint8_t pb6 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6);
-                    uint8_t pb7 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_7);
-                    if (pb6 == GPIO_PIN_SET && pb7 == GPIO_PIN_SET)
-                        g_mode = 1;
-                    else if (pb6 == GPIO_PIN_RESET && pb7 == GPIO_PIN_SET)
-                        g_mode = 2;
-                    else
-                        g_mode = 3;
-                }
+                HAL_Delay(20);  /* 消抖 */
+                pb4 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
+                pb5 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5);
+                pb6 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6);
+
+                if (pb4 == GPIO_PIN_SET)
+                    g_mode = 1;
+                else if (pb5 == GPIO_PIN_RESET)
+                    g_mode = 2;
+                else if (pb6 == GPIO_PIN_RESET)
+                    g_mode = 3;
+
                 Protocol_Init(g_mode);
                 sys_state = SYS_IDLE;
             }
@@ -248,9 +248,10 @@ int main(void)
             }
             else
             {
-                /* 5s 后关闭，保持静止 */
+                /* 5s 后关闭，回到待触发状态 */
                 HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
                 HAL_GPIO_WritePin(GPIOA,  GPIO_PIN_3,  GPIO_PIN_RESET);
+                sys_state = SYS_WAIT_TRIGGER;
             }
         }
         break;
