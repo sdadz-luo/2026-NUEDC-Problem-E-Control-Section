@@ -156,17 +156,6 @@ int Motor_Zero(uint8_t addr)
     return Motor_SendFrame(frame, sizeof(frame));
 }
 
-int Motor_Stop(uint8_t addr)
-{
-    uint8_t frame[3];
-
-    frame[0] = addr;
-    frame[1] = 0xF7;
-    frame[2] = 0x6B;
-
-    return Motor_SendFrame(frame, sizeof(frame));
-}
-
 int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit)
 {
     uint8_t frame[13];
@@ -179,6 +168,9 @@ int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit)
     if (fabsf(value - motor_current[addr]) < 0.01f) {
         return 1;
     }
+
+    /* 发送前清空残留数据，防止迟到应答干扰本次等待 */
+    Motor_FlushRx();
 
     /* ---- 计算脉冲值和方向 ---- */
     if (unit == UNIT_MM) {

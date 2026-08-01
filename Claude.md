@@ -38,7 +38,7 @@
 | 文件 | 说明 |
 |------|------|
 | `motor.h` | 步进电机驱动 — 地址宏、方向速度配置、`Motor_SendMoveTo` API、坐标偏移、Z 轴升降位置宏 |
-| `motor.c` | 帧组装（float 精算→uint32 组帧）、方向 + 脉冲绝对值双向运动、阻塞等待到位、超时重试 |
+| `motor.c` | 帧组装（float 精算→uint32 组帧）、方向 + 脉冲绝对值双向运动、发送前清残留、阻塞等待到位 |
 | `protocol.h` | UART1 上位机协议 — 帧格式宏、MoveCommand 结构体、状态机 API |
 | `protocol.c` | 逐字节状态机解析（IDLE→WAIT_CMD→WAIT_DATA）、int16 大端坐标 /100 转浮点 |
 
@@ -47,7 +47,7 @@
 ```c
 void Motor_Init(void);                                           // 上电使能+清零四轴
 int  Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit); // 发绝对定位指令，不等待
-int  Motor_WaitMoveDone(uint8_t addr);                            // 等待指定电机到位，±10s 超时
+int  Motor_WaitMoveDone(uint8_t addr);                            // 等待指定电机到位，±7s 超时
 int  Motor_WaitAllDone(const uint8_t *addrs, uint8_t count, uint32_t timeout_ms); // 并行等待多轴到位
 int  Motor_Enable(uint8_t addr);                                 // 使能（发后即回，不等应答）
 int  Motor_Zero(uint8_t addr);                                   // 清零（发后即回，不等应答）
@@ -62,7 +62,7 @@ int  Motor_Stop(uint8_t addr);                                   // 急停（发
 - 内部维护各轴当前位置追踪，已在目标位的轴自动跳过通信
 - 多轴等待使用 `Motor_WaitAllDone`，应答可乱序到达
 - `Motor_Enable/Zero/Stop`：发送即返回，不等待应答
-- 到位应答 `{addr} FD 9F 6B`，超时 10s 后重发一次
+- 到位应答 `{addr} FD 9F 6B`，超时 7s 返回失败（无自动重发）
 
 ### 坐标映射
 
@@ -87,7 +87,7 @@ Z 轴只有抬起/放下两种状态，直接使用宏定义：
 
 ```c
 #define Z_HEIGHT_RAISE_MM   0.0f   /* 抬起高度（距离零点） */
-#define Z_HEIGHT_LOWER_MM   17.0f  /* 放下高度（距离零点） */
+#define Z_HEIGHT_LOWER_MM   18.0f  /* 放下高度（距离零点） */
 ```
 
 ---

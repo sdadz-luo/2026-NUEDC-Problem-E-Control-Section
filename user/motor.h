@@ -45,13 +45,12 @@ extern "C" {
 
 /* =========== Z 轴升降位置 =========== */
 #define Z_HEIGHT_RAISE_MM   0.0f  /* 抬起高度（距离零点） */
-#define Z_HEIGHT_LOWER_MM   17.0f   /* 放下高度（距离零点） */
+#define Z_HEIGHT_LOWER_MM   18.0f   /* 放下高度（距离零点） */
 
 /* ================== 运动参数 ================== */
 #define MOTOR_ACCEL         0xC8U       /* 加速度系数（默认 200） */
 #define MOTOR_FRAME_INTERVAL_MS  10U    /* 帧间间隔 ≥10ms */
-#define MOTOR_TIMEOUT_MS    10000U      /* 单次等待超时 10s */
-#define MOTOR_RETRY_MAX     1U          /* 超时后重发次数 */
+#define MOTOR_TIMEOUT_MS    7000U       /* 单次等待超时 7s */
 
 /* ================== 单位枚举 ================== */
 typedef enum {
@@ -111,13 +110,6 @@ int Motor_WaitMoveDone(uint8_t addr);
   *         适合共享总线场景下多轴并行运动后的等待
   */
 int Motor_WaitAllDone(const uint8_t *addrs, uint8_t count, uint32_t timeout_ms);
-
-/**
-  * @brief  急停指定电机
-  * @param  addr  电机地址
-  * @retval 0=成功, -1=失败
-  */
-int Motor_Stop(uint8_t addr);
 
 #ifdef __cplusplus
 }
