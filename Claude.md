@@ -69,8 +69,8 @@ int  Motor_Stop(uint8_t addr);                                   // 急停（发
 机器上电归零位（电机零点）与上位机坐标系原点存在固定偏移，Z/Yaw 无偏移。
 
 ```c
-#define HOME_OFFSET_X_MM    -145.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
-#define HOME_OFFSET_Y_MM    -299.0f   /* 上位机原点在电机坐标系下的 Y 坐标 */
+#define HOME_OFFSET_X_MM    -140.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
+#define HOME_OFFSET_Y_MM    -304.0f   /* 上位机原点在电机坐标系下的 Y 坐标 */
 ```
 
 **映射公式**（调用 `Motor_SendMoveTo` 时）：
@@ -146,13 +146,15 @@ Z 轴只有抬起/放下两种状态，直接使用宏定义：
 1. X/Y 轴同时移动到抓取点（+HOME_OFFSET 映射）
 2. Z 轴下降 → 电磁铁吸合（PB1 = 高电平）→ 等待 200ms
 3. Z 轴抬起
-4. X/Y/Yaw 轴同时移动到放置点（+HOME_OFFSET 映射）
-5. Z 轴下降 → 电磁铁释放（PB1 = 低电平）→ 等待 200ms
-6. Z 轴抬起回到安全高度
+4. X/Y 轴同时移动到放置点（+HOME_OFFSET 映射）
+5. Yaw 轴单独旋转到目标角度
+6. Z 轴下降 → 电磁铁释放（PB1 = 低电平）→ 等待 200ms
+7. Z 轴抬起回到安全高度
+8. Yaw 轴归零
 
 ### 游戏完成模式
 
-- 触发：发送 DONE 后 5s 内未收到下一条指令（`GAME_TIMEOUT_MS = 5000U`）
+- 触发：发送 DONE 后 3s 内未收到下一条指令（`GAME_TIMEOUT_MS = 3000U`）
 - 动作：四轴发送归零指令（不阻塞等待），LED + 蜂鸣器 0.5Hz 闪烁
 - 持续时间：5s（`COMPLETE_DURATION_MS = 5000U`），之后回到 `SYS_WAIT_TRIGGER` 等待下次触发
 

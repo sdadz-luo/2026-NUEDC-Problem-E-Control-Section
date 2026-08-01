@@ -40,8 +40,8 @@ extern "C" {
 #define MOTOR_YAW_RPM   500U
 
 /* =========== 上位机原点 → 电机零点 偏移量（待实测） =========== */
-#define HOME_OFFSET_X_MM    -145.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
-#define HOME_OFFSET_Y_MM    -299.0f   /* 上位机原点在电机坐标系下的 Y 坐标 */
+#define HOME_OFFSET_X_MM    -140.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
+#define HOME_OFFSET_Y_MM    -304.0f   /* 上位机原点在电机坐标系下的 Y 坐标 */
 
 /* =========== Z 轴升降位置 =========== */
 #define Z_HEIGHT_RAISE_MM   0.0f  /* 抬起高度（距离零点） */
@@ -97,7 +97,7 @@ int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit);
   * @brief  等待指定电机到位（阻塞）
   * @param  addr  电机地址
   * @retval 0=到位成功, -1=超时
-  * @note   等待电机回传 {addr} FD 9F 6B，超时 20s
+  * @note   等待电机回传 {addr} FD 9F 6B，超时 10s
   */
 int Motor_WaitMoveDone(uint8_t addr);
 

@@ -34,7 +34,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define GAME_TIMEOUT_MS      5000U   /* 游戏完成超时 */
+#define GAME_TIMEOUT_MS      3000U   /* 游戏完成超时 */
 #define COMPLETE_DURATION_MS 5000U   /* 完成模式持续时间 */
 /* USER CODE END PD */
 
@@ -78,7 +78,6 @@ static void pick_and_place(MoveCommand *cmd)
 {
     /* 1. 移动到抓取点（先发后等，并行等待应答） */
     {
-        uint8_t grab_addrs[] = {MOTOR_ADDR_X, MOTOR_ADDR_Y};
         uint8_t grab_cnt = 0;
         uint8_t grab_list[2];
 
@@ -104,18 +103,20 @@ static void pick_and_place(MoveCommand *cmd)
 
     /* 5. 移动到放置点（先发后等，并行等待应答） */
     {
-        uint8_t place_list[3];
+        uint8_t place_list[2];
         uint8_t place_cnt = 0;
 
         if (Motor_SendMoveTo(MOTOR_ADDR_X,   cmd->x_place + HOME_OFFSET_X_MM, UNIT_MM) == 0)
             place_list[place_cnt++] = MOTOR_ADDR_X;
         if (Motor_SendMoveTo(MOTOR_ADDR_Y,   cmd->y_place + HOME_OFFSET_Y_MM, UNIT_MM) == 0)
             place_list[place_cnt++] = MOTOR_ADDR_Y;
-        if (Motor_SendMoveTo(MOTOR_ADDR_YAW, cmd->yaw,                      UNIT_DEG) == 0)
-            place_list[place_cnt++] = MOTOR_ADDR_YAW;
         if (place_cnt > 0)
             Motor_WaitAllDone(place_list, place_cnt, MOTOR_TIMEOUT_MS);
     }
+
+    /* 5.5 Yaw 旋转到目标角度 */
+    if (Motor_SendMoveTo(MOTOR_ADDR_YAW, cmd->yaw, UNIT_DEG) == 0)
+        Motor_WaitMoveDone(MOTOR_ADDR_YAW);
 
     /* 6. Z 轴落下 */
     if (Motor_SendMoveTo(MOTOR_ADDR_Z, Z_HEIGHT_LOWER_MM, UNIT_MM) == 0)
@@ -128,6 +129,10 @@ static void pick_and_place(MoveCommand *cmd)
     /* 8. Z 轴抬起 */
     if (Motor_SendMoveTo(MOTOR_ADDR_Z, Z_HEIGHT_RAISE_MM, UNIT_MM) == 0)
         Motor_WaitMoveDone(MOTOR_ADDR_Z);
+
+    /* 9. Yaw 归零 */
+    if (Motor_SendMoveTo(MOTOR_ADDR_YAW, 0.0f, UNIT_DEG) == 0)
+        Motor_WaitMoveDone(MOTOR_ADDR_YAW);
 }
 
 /* USER CODE END 0 */
@@ -146,23 +151,23 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+    HAL_Init();
 
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
 
   /* Configure the system clock */
-  SystemClock_Config();
+    SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_USART1_UART_Init();
-  MX_USART3_UART_Init();
+    MX_GPIO_Init();
+    MX_USART1_UART_Init();
+    MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
 
 	Motor_Init();                                // 使能+清零四轴

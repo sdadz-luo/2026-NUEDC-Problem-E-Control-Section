@@ -234,7 +234,7 @@ int Motor_WaitAllDone(const uint8_t *addrs, uint8_t count, uint32_t timeout_ms)
         uint8_t resp[4];
 
         /* 短超时读取，收满 4 字节即返回 */
-        if (HAL_UART_Receive(&huart3, resp, 4, 100) == HAL_OK) {
+        if (HAL_UART_Receive(&huart3, resp, 4, 20) == HAL_OK) {
             /* 检查应答是否属于某个待处理的轴 */
             for (i = 0; i < count; i++) {
                 if ((pending & (1 << i))
