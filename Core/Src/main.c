@@ -95,7 +95,6 @@ static void pick_and_place(MoveCommand *cmd)
 
     /* 3. 电磁铁吸合 */
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
-    HAL_Delay(200);
 
     /* 4. Z 轴抬起 */
     if (Motor_SendMoveTo(MOTOR_ADDR_Z, Z_HEIGHT_RAISE_MM, UNIT_MM) == 0)
@@ -124,7 +123,6 @@ static void pick_and_place(MoveCommand *cmd)
 
     /* 7. 电磁铁释放 */
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_Delay(200);
 
     /* 8. Z 轴抬起 */
     if (Motor_SendMoveTo(MOTOR_ADDR_Z, Z_HEIGHT_RAISE_MM, UNIT_MM) == 0)
@@ -226,7 +224,7 @@ int main(void)
             }
         }
 
-        /* 5s 内未收到下一条指令 → 游戏完成 */
+        /* 3s 内未收到下一条指令 → 游戏完成 */
         if (sys_state == SYS_WAIT_NEXT
             && HAL_GetTick() - tick_done > GAME_TIMEOUT_MS)
         {

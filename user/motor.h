@@ -40,7 +40,7 @@ extern "C" {
 #define MOTOR_YAW_RPM   500U
 
 /* =========== 上位机原点 → 电机零点 偏移量（待实测） =========== */
-#define HOME_OFFSET_X_MM    -140.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
+#define HOME_OFFSET_X_MM    -145.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
 #define HOME_OFFSET_Y_MM    -304.0f   /* 上位机原点在电机坐标系下的 Y 坐标 */
 
 /* =========== Z 轴升降位置 =========== */
@@ -48,9 +48,12 @@ extern "C" {
 #define Z_HEIGHT_LOWER_MM   18.0f   /* 放下高度（距离零点） */
 
 /* ================== 运动参数 ================== */
-#define MOTOR_ACCEL         0xC8U       /* 加速度系数（默认 200） */
-#define MOTOR_FRAME_INTERVAL_MS  10U    /* 帧间间隔 ≥10ms */
-#define MOTOR_TIMEOUT_MS    7000U       /* 单次等待超时 7s */
+#define MOTOR_ACCEL             0xC8U   /* 加速度系数（默认 200） */
+#define MOTOR_FRAME_INTERVAL_MS 10U     /* 帧间间隔 ≥10ms */
+#define MOTOR_TIMEOUT_MS        7000U   /* 等待总时限 7s */
+#define MOTOR_RETRY_DELAY_MS    3000U   /* 前 3s 静默等待，不重发 */
+#define MOTOR_RETRY_PERIOD_MS   500U    /* 3s 后每 0.5s 重发一轮 */
+#define MOTOR_RESEND_STAGGER_MS 20U     /* 多轴重发错开间隔 */
 
 /* ================== 单位枚举 ================== */
 typedef enum {
@@ -96,7 +99,7 @@ int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit);
   * @brief  等待指定电机到位（阻塞）
   * @param  addr  电机地址
   * @retval 0=到位成功, -1=超时
-  * @note   等待电机回传 {addr} FD 9F 6B，超时 10s
+  * @note   等待电机回传 {addr} FD 9F 6B，超时 MOTOR_TIMEOUT_MS（7s）
   */
 int Motor_WaitMoveDone(uint8_t addr);
 

@@ -13,6 +13,7 @@
 /* ======================== 内部变量 ======================== */
 
 static float motor_current[5];  /* 各轴当前目标位置，索引 1~4，地址 0 不用 */
+static MotorUnit motor_unit[5];  /* 各轴当前目标单位，索引 1~4 */
 
 /* ======================== 内部辅助函数 ======================== */
 
@@ -106,25 +107,6 @@ static int Motor_SendFrame(const uint8_t *data, uint8_t len)
     return 0;
 }
 
-/**
-  * @brief  等待绝对定位到位应答 ({addr} FD 9F 6B)
-  * @param  addr       电机地址
-  * @param  timeout_ms 超时时间
-  * @retval 0=到位, -1=超时/错误
-  */
-static int Motor_WaitArrived(uint8_t addr, uint32_t timeout_ms)
-{
-    uint8_t resp[4];
-
-    if (HAL_UART_Receive(&huart3, resp, 4, timeout_ms) != HAL_OK) {
-        return -1;
-    }
-    if (resp[0] != addr || resp[1] != 0xFD || resp[2] != 0x9F || resp[3] != 0x6B) {
-        return -1;
-    }
-    return 0;
-}
-
 /* ======================== 指令发送函数 ======================== */
 
 int Motor_Enable(uint8_t addr)
@@ -156,21 +138,20 @@ int Motor_Zero(uint8_t addr)
     return Motor_SendFrame(frame, sizeof(frame));
 }
 
-int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit)
+/**
+  * @brief  组帧并发送绝对定位指令（内部函数，不检查位置追踪）
+  * @param  addr   电机地址
+  * @param  value  目标值
+  * @param  unit   单位
+  * @retval 0=成功, -1=失败
+  */
+static int Motor_SendMoveToFrame(uint8_t addr, float value, MotorUnit unit)
 {
     uint8_t frame[13];
     float pulse_f;
     uint32_t pulse_abs;
     uint8_t dir;
     uint16_t rpm;
-
-    /* 已在目标位置 → 跳过，无需发送 */
-    if (fabsf(value - motor_current[addr]) < 0.01f) {
-        return 1;
-    }
-
-    /* 发送前清空残留数据，防止迟到应答干扰本次等待 */
-    Motor_FlushRx();
 
     /* ---- 计算脉冲值和方向 ---- */
     if (unit == UNIT_MM) {
@@ -199,16 +180,80 @@ int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit)
     frame[12] = 0x6B;
 
     /* ---- 发送（不等待应答） ---- */
-    if (Motor_SendFrame(frame, sizeof(frame)) == 0) {
+    return Motor_SendFrame(frame, sizeof(frame));
+}
+
+/**
+  * @brief  重发指定电机的当前目标指令（绕过位置追踪）
+  * @param  addr  电机地址
+  * @note   用于超时确认：已到位电机收到同位置指令会立即回发应答
+  */
+static void Motor_ResendMoveTo(uint8_t addr)
+{
+    Motor_SendMoveToFrame(addr, motor_current[addr], motor_unit[addr]);
+}
+
+int Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit)
+{
+    /* 已在目标位置 → 跳过，无需发送 */
+    if (fabsf(value - motor_current[addr]) < 0.01f) {
+        return 1;
+    }
+
+    /* 发送前清空残留数据，防止迟到应答干扰本次等待 */
+    Motor_FlushRx();
+
+    /* ---- 组帧发送 ---- */
+    if (Motor_SendMoveToFrame(addr, value, unit) == 0) {
         motor_current[addr] = value;  /* 发送成功，更新追踪 */
+        motor_unit[addr]    = unit;
         return 0;
     }
     return -1;
 }
 
+/**
+  * @brief  在给定窗口内轮询等待单个轴到位应答
+  * @param  addr       电机地址
+  * @param  window_ms  窗口时间（建议 ≥20ms，足够收满一帧）
+  * @retval 0=到位, -1=窗口内未收到
+  */
+static int Motor_WaitArrivedWindow(uint8_t addr, uint32_t window_ms)
+{
+    uint8_t resp[4];
+
+    if (HAL_UART_Receive(&huart3, resp, 4, window_ms) != HAL_OK) {
+        return -1;
+    }
+    if (resp[0] != addr || resp[1] != 0xFD || resp[2] != 0x9F || resp[3] != 0x6B) {
+        return -1;
+    }
+    return 0;
+}
+
 int Motor_WaitMoveDone(uint8_t addr)
 {
-    return Motor_WaitArrived(addr, MOTOR_TIMEOUT_MS);
+    uint32_t start = HAL_GetTick();
+    uint32_t elapsed;
+
+    /* Phase 1: 0~3s 静默等待（不打扰运动中的电机） */
+    if (Motor_WaitArrivedWindow(addr, MOTOR_RETRY_DELAY_MS) == 0) {
+        return 0;
+    }
+
+    /* Phase 2: 3~7s，每 0.5s 重发一次并等待 */
+    while (1) {
+        elapsed = HAL_GetTick() - start;
+        if (elapsed >= MOTOR_TIMEOUT_MS) {
+            return -1;   /* 总时限到 */
+        }
+
+        Motor_FlushRx();            /* 清残留，防迟到应答干扰本轮 */
+        Motor_ResendMoveTo(addr);   /* 重发同位置，已到位电机立即回发 */
+        if (Motor_WaitArrivedWindow(addr, MOTOR_RETRY_PERIOD_MS) == 0) {
+            return 0;
+        }
+    }
 }
 
 int Motor_WaitAllDone(const uint8_t *addrs, uint8_t count, uint32_t timeout_ms)
@@ -222,27 +267,74 @@ int Motor_WaitAllDone(const uint8_t *addrs, uint8_t count, uint32_t timeout_ms)
         pending |= (1 << i);
     }
 
+    /* Phase 1: 0~3s 静默等待，收谁清谁（不打扰运动中的电机） */
     while (pending) {
         uint8_t resp[4];
+        uint32_t elapsed = HAL_GetTick() - start;
+        uint32_t remain  = (elapsed >= MOTOR_RETRY_DELAY_MS)
+                         ? 0U : (MOTOR_RETRY_DELAY_MS - elapsed);
 
-        /* 短超时读取，收满 4 字节即返回 */
-        if (HAL_UART_Receive(&huart3, resp, 4, 20) == HAL_OK) {
-            /* 检查应答是否属于某个待处理的轴 */
+        if (remain == 0U) {
+            break;   /* 静默期结束，进入 Phase 2 */
+        }
+
+        if (HAL_UART_Receive(&huart3, resp, 4, remain) == HAL_OK) {
             for (i = 0; i < count; i++) {
                 if ((pending & (1 << i))
                     && resp[0] == addrs[i]
                     && resp[1] == 0xFD
                     && resp[2] == 0x9F
                     && resp[3] == 0x6B) {
-                    pending &= ~(1 << i);   /* 标记该轴到位 */
+                    pending &= ~(1 << i);
                     break;
                 }
             }
+        } else {
+            break;   /* 静默期内无更多数据，提前进入 Phase 2 */
         }
 
-        /* 总超时检查 */
-        if (HAL_GetTick() - start > timeout_ms) {
+        if (HAL_GetTick() - start >= timeout_ms) {
             return -1;
+        }
+    }
+
+    /* Phase 2: 3s 后每 0.5s 对未到位轴错开重发一次 */
+    while (pending) {
+        uint32_t deadline;
+
+        if (HAL_GetTick() - start >= timeout_ms) {
+            return -1;   /* 总时限到 */
+        }
+
+        /* 逐轴错开重发，避免回发在总线上碰撞 */
+        Motor_FlushRx();   /* 清残留，防迟到应答干扰本轮 */
+        for (i = 0; i < count; i++) {
+            if (pending & (1 << i)) {
+                Motor_ResendMoveTo(addrs[i]);
+                HAL_Delay(MOTOR_RESEND_STAGGER_MS);
+            }
+        }
+
+        /* 本轮重发后的 0.5s 窗口内收应答 */
+        deadline = HAL_GetTick() + MOTOR_RETRY_PERIOD_MS;
+        while (pending && HAL_GetTick() < deadline) {
+            uint8_t resp[4];
+            uint32_t remain = deadline - HAL_GetTick();
+
+            if (HAL_UART_Receive(&huart3, resp, 4, remain) == HAL_OK) {
+                for (i = 0; i < count; i++) {
+                    if ((pending & (1 << i))
+                        && resp[0] == addrs[i]
+                        && resp[1] == 0xFD
+                        && resp[2] == 0x9F
+                        && resp[3] == 0x6B) {
+                        pending &= ~(1 << i);
+                        break;
+                    }
+                }
+            } else {
+                break;   /* 窗口内无数据，等待下一轮 */
+            }
         }
     }
     return 0;
@@ -255,9 +347,10 @@ void Motor_Init(void)
 
     HAL_Delay(1000);
 
-    /* 初始化位置追踪 */
+    /* 初始化位置/单位追踪 */
     for (i = 1; i <= 4; i++) {
         motor_current[i] = 0.0f;
+        motor_unit[i]    = UNIT_MM;
     }
 
     /* 先逐个使能（无回发等待，仅 10ms 帧间隔） */

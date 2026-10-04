@@ -49,7 +49,7 @@ typedef struct {
 
 /**
   * @brief  初始化协议模块并发送 READY 帧
-  * @param  mode  工作模式（1 或 2，来自 PB5 检测）
+  * @param  mode  工作模式（1/2/3，来自 PB4/PB5/PB6 按键）
   */
 void Protocol_Init(uint8_t mode);
 
