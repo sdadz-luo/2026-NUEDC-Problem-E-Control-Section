@@ -7,7 +7,7 @@
 | **芯片** | STM32F103C8T6（Cortex-M3, 64KB Flash, 20KB SRAM） |
 | **工具链** | Keil MDK-ARM V5.32 / ARMCLANG V6.24 |
 | **HAL 框架** | STM32Cube FW_F1 V1.8.7 + CubeMX 6.17.0 |
-| **项目状态** | 开发完成，所有功能测试通过 ✅ |
+| **项目状态** | 2026 全国大学生电子设计竞赛 E 题（控制组），省一等奖，所有功能测试通过 ✅ |
 
 ---
 
@@ -47,11 +47,10 @@
 ```c
 void Motor_Init(void);                                           // 上电使能+清零四轴
 int  Motor_SendMoveTo(uint8_t addr, float value, MotorUnit unit); // 发绝对定位指令，不等待
-int  Motor_WaitMoveDone(uint8_t addr);                            // 等待指定电机到位，±7s 超时
+int  Motor_WaitMoveDone(uint8_t addr);                            // 等待指定电机到位，最长 7s 超时
 int  Motor_WaitAllDone(const uint8_t *addrs, uint8_t count, uint32_t timeout_ms); // 并行等待多轴到位
 int  Motor_Enable(uint8_t addr);                                 // 使能（发后即回，不等应答）
 int  Motor_Zero(uint8_t addr);                                   // 清零（发后即回，不等应答）
-int  Motor_Stop(uint8_t addr);                                   // 急停（发后即回，不等应答）
 ```
 
 - X/Y/Z 传 `mm`，Yaw 传 `°`，单位由 `MotorUnit` 枚举指定
@@ -62,14 +61,22 @@ int  Motor_Stop(uint8_t addr);                                   // 急停（发
 - 内部维护各轴当前位置追踪，已在目标位的轴自动跳过通信
 - 多轴等待使用 `Motor_WaitAllDone`，应答可乱序到达
 - `Motor_Enable/Zero/Stop`：发送即返回，不等待应答
-- 到位应答 `{addr} FD 9F 6B`，超时 7s 返回失败（无自动重发）
+- 到位应答 `{addr} FD 9F 6B`
+
+#### 等待重发机制（两阶段）
+
+- **Phase 1（0~3s）**：静默等待应答，不发送任何指令（`MOTOR_RETRY_DELAY_MS`）
+- **Phase 2（3~7s）**：每 0.5s 对未到位轴重发同位置指令（`MOTOR_RETRY_PERIOD_MS`）
+  - 已到位电机收到同位置指令会立即回发应答，用于确认"应答丢失但已到位"的情况
+  - 多轴重发错开 20ms（`MOTOR_RESEND_STAGGER_MS`），避免回发在总线上碰撞
+- 总时限 7s（`MOTOR_TIMEOUT_MS`），超时返回 -1（无更多重试）
 
 ### 坐标映射
 
 机器上电归零位（电机零点）与上位机坐标系原点存在固定偏移，Z/Yaw 无偏移。
 
 ```c
-#define HOME_OFFSET_X_MM    -140.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
+#define HOME_OFFSET_X_MM    -145.0f   /* 上位机原点在电机坐标系下的 X 坐标 */
 #define HOME_OFFSET_Y_MM    -304.0f   /* 上位机原点在电机坐标系下的 Y 坐标 */
 ```
 
@@ -134,23 +141,21 @@ Z 轴只有抬起/放下两种状态，直接使用宏定义：
        ↓
 到位后 → UART1 回报 DONE（AA 02 BB）
        ↓
-上位机 → 发送下一条指令（5s 内）
+上位机 → 发送下一条指令（3s 内）
        ↓
 ...（重复直至所有任务完成）
        ↓
-5s 内未收到指令 → 游戏完成 → LED + 蜂鸣器 0.5Hz 闪烁 5s → 停止
+3s 内未收到指令 → 游戏完成 → LED + 蜂鸣器 0.5Hz 闪烁 5s → 停止
 ```
 
 ### 典型 pick-and-place 动作序列
 
-1. X/Y 轴同时移动到抓取点（+HOME_OFFSET 映射）
-2. Z 轴下降 → 电磁铁吸合（PB1 = 高电平）→ 等待 200ms
-3. Z 轴抬起
-4. X/Y 轴同时移动到放置点（+HOME_OFFSET 映射）
-5. Yaw 轴单独旋转到目标角度
-6. Z 轴下降 → 电磁铁释放（PB1 = 低电平）→ 等待 200ms
-7. Z 轴抬起回到安全高度
-8. Yaw 轴归零
+1. X/Y 轴并行移动到抓取点（+HOME_OFFSET 映射）
+2. Z 轴落下，电磁铁吸合（PB1 = 高电平）后 Z 轴抬起
+3. X/Y 轴并行移动到放置点（+HOME_OFFSET 映射）
+4. Yaw 轴旋转到目标角度
+5. Z 轴落下，电磁铁释放（PB1 = 低电平）后 Z 轴抬起
+6. Yaw 轴归零
 
 ### 游戏完成模式
 
@@ -160,8 +165,8 @@ Z 轴只有抬起/放下两种状态，直接使用宏定义：
 
 ### 安全机制
 
-- 无硬件限位开关，采用**软件限位**（在程序中设定各轴行程范围）
-- 电机驱动器的堵转保护（闭环步进电机自带）
+- 无硬件限位开关，依赖闭环步进电机驱动器的堵转保护
+- 各轴行程由上位机指令范围约束；`HOME_OFFSET_*` 与方向宏需按机械装配实测标定
 
 ---
 
@@ -267,7 +272,6 @@ MCU        → 发 AA 02 BB（完成确认）
 - **波特率**：115200-8N1，HEX 格式
 - **总线**：单路 UART，4 个电机共享，通过地址（1~4）区分，`00H` 为广播地址
 - **帧间间隔**：≥10ms
-- **协议详情**：见桌面文件 `张大头步进电机协议总结.md`
 
 #### 帧结构
 
